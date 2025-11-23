@@ -243,6 +243,12 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                             leader_commit=self.commit_index
                         )
 
+                        # Q4 STEP 3 LOGGING: Show what we're sending
+                        if entries:
+                            print(f"[Node {self.node_id}] Q4 STEP 3: Sending {len(entries)} log entries to Node {peer_id}")
+                            print(f"[Node {self.node_id}]            Entries: {[f'idx={e.index}' for e in entries]}")
+                            print(f"[Node {self.node_id}]            With commit index c={self.commit_index}")
+
                         msg_type = "AppendEntries (heartbeat)" if not entries else f"AppendEntries ({len(entries)} entries)"
                         print(f"[Node {self.node_id}] sends RPC {msg_type} to Node {peer_id}")
 
@@ -258,12 +264,12 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                                 self._step_down(response.term)
                                 return
 
-                            # Update follower's indices
+                            # Update follower's indices (Q4: Track ACKs)
                             if response.success:
                                 if entries:
                                     self.match_index[peer_id] = prev_log_index + len(entries)
                                     self.next_index[peer_id] = self.match_index[peer_id] + 1
-                                    print(f"[Node {self.node_id}] Node {peer_id} replicated up to index {self.match_index[peer_id]}")
+                                    print(f"[Node {self.node_id}] Q4: Received ACK from Node {peer_id} (replicated up to {self.match_index[peer_id]})")
                             else:
                                 # Decrement next_index and retry
                                 self.next_index[peer_id] = max(1, self.next_index[peer_id] - 1)
@@ -292,7 +298,7 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                 if n == 0:
                     break
 
-                # Count how many nodes have replicated this entry
+                # Count how many nodes have replicated this entry (Q4 STEP 6)
                 replicated_count = 1  # Leader has it
                 for peer_id in self.peers:
                     if peer_id != self.node_id and self.match_index.get(peer_id, 0) >= n:
@@ -302,7 +308,9 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                 majority = (len(self.peers) + 1) // 2 + 1
                 if replicated_count >= majority and self.log[n-1].term == self.current_term:
                     if n > self.commit_index:
-                        print(f"[Node {self.node_id}] Committing entries up to index {n} (replicated on {replicated_count} nodes)")
+                        print(f"[Node {self.node_id}] Q4 STEP 6: Received MAJORITY ACKs ({replicated_count}/{len(self.peers)+1} nodes)")
+                        print(f"[Node {self.node_id}] Q4 STEP 7: Committing entry {n} (was pending, now committed)")
+                        print(f"[Node {self.node_id}]            Incrementing c: {self.commit_index} → {n}")
                         self.commit_index = n
                     break
 
@@ -317,7 +325,8 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                 try:
                     data = json.loads(entry.data)
                     result = self._execute_operation(entry.operation, data)
-                    print(f"[Node {self.node_id}] Applied entry {self.last_applied}: {entry.operation}")
+                    print(f"[Node {self.node_id}] Q4 EXECUTE: Applied entry {self.last_applied}: {entry.operation}")
+                    print(f"[Node {self.node_id}]             Data: {entry.data[:80]}")
                 except Exception as e:
                     print(f"[Node {self.node_id}] Error applying entry {self.last_applied}: {e}")
 
@@ -434,17 +443,22 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
 
                     success = True
 
-                    # Append new entries
+                    # Append new entries (Q4 STEP 4: Follower copies log)
                     if request.entries:
                         # Delete conflicting entries and append new ones
                         self.log = self.log[:request.prev_log_index]
                         self.log.extend(request.entries)
-                        print(f"[Node {self.node_id}] Appended {len(request.entries)} entries, log size now {len(self.log)}")
+                        print(f"[Node {self.node_id}] Q4 STEP 4: Follower copied {len(request.entries)} entries to log")
+                        print(f"[Node {self.node_id}]            Log size now: {len(self.log)}")
+                        for entry in request.entries:
+                            print(f"[Node {self.node_id}]            - Entry {entry.index}: {entry.operation} (term {entry.term})")
 
-                    # Update commit index
+                    # Update commit index (Q4 STEP 5)
                     if request.leader_commit > self.commit_index:
+                        old_commit = self.commit_index
                         self.commit_index = min(request.leader_commit, len(self.log))
-                        print(f"[Node {self.node_id}] Updated commit_index to {self.commit_index}")
+                        print(f"[Node {self.node_id}] Q4 STEP 5: Updated commit index c: {old_commit} → {self.commit_index}")
+                        print(f"[Node {self.node_id}]            Will execute operations up to index {self.commit_index}")
 
                         # Apply committed entries
                         self._apply_committed_entries()
@@ -465,6 +479,7 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
             # If not leader, redirect to leader
             if self.state != NodeState.LEADER:
                 leader_id = self.current_leader if self.current_leader is not None else -1
+                print(f"[Node {self.node_id}] ❌ NOT LEADER - Redirecting client to Node {leader_id}")
                 return raft_pb2.ClientRequestResponse(
                     success=False,
                     message=f"Not the leader. Current leader: Node {leader_id}",
@@ -472,7 +487,10 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
                     leader_id=leader_id
                 )
 
-            # Leader: append to log
+            print(f"[Node {self.node_id}] ✓ I AM LEADER - Processing client request")
+            print(f"[Node {self.node_id}] Q4 STEP 1: Leader received request for operation '{request.operation}'")
+
+            # Leader: append to log (Q4 STEP 2)
             new_entry = raft_pb2.LogEntry(
                 term=self.current_term,
                 index=len(self.log) + 1,
@@ -481,10 +499,17 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
             )
 
             self.log.append(new_entry)
-            print(f"[Node {self.node_id}] Appended operation '{request.operation}' to log at index {len(self.log)}")
-
-            # Wait for replication and commitment
             target_index = len(self.log)
+
+            print(f"[Node {self.node_id}] Q4 STEP 2: Appended <{request.operation}, t={self.current_term}, k+1={target_index}> to log")
+            print(f"[Node {self.node_id}]           Log size: {len(self.log)}, Commit index c={self.commit_index}")
+            print(f"[Node {self.node_id}]           Entry details: index={new_entry.index}, term={new_entry.term}, op={new_entry.operation}")
+
+        # Q4 STEP 3 happens in _send_heartbeats
+        print(f"[Node {self.node_id}] Q4 STEP 3: Will send log to all followers on next heartbeat...")
+
+        # Wait for replication and commitment
+        target_index = len(self.log)
 
         # Release lock while waiting
         max_wait = 5.0  # 5 seconds timeout
@@ -494,6 +519,8 @@ class RaftNode(raft_pb2_grpc.RaftNodeServicer):
             with self.lock:
                 if self.commit_index >= target_index:
                     # Entry committed!
+                    print(f"[Node {self.node_id}] Q4 FINAL: Operation committed at index {target_index}")
+                    print(f"[Node {self.node_id}]          Commit index c incremented: {target_index-1} → {self.commit_index}")
                     result_data = json.dumps({"status": "committed", "index": target_index})
                     return raft_pb2.ClientRequestResponse(
                         success=True,
