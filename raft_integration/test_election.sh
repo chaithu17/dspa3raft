@@ -1,6 +1,9 @@
 #!/bin/bash
 # Simple shell script version of leader election test
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 echo "======================================================================"
 echo "                  TEST CASE: RAFT LEADER ELECTION                     "
 echo "======================================================================"
@@ -18,7 +21,7 @@ echo
 # Step 2: Start cluster
 echo "STEP 2: START CLUSTER"
 echo "Starting 5-node Raft cluster..."
-cd /home/user/dspa3raft/raft_integration
+cd "$SCRIPT_DIR"
 docker-compose up -d
 if [ $? -ne 0 ]; then
     echo "✗ Failed to start cluster"

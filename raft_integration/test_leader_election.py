@@ -8,7 +8,9 @@ import subprocess
 import time
 import sys
 import re
+import os
 from datetime import datetime
+from pathlib import Path
 
 class Colors:
     HEADER = '\033[95m'
@@ -65,7 +67,18 @@ def cleanup_containers():
 def start_cluster():
     """Start the 5-node Raft cluster"""
     print_info("Starting 5-node Raft cluster...")
-    success, stdout, stderr = run_command("cd /home/user/dspa3raft/raft_integration && docker-compose up -d")
+
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent.absolute()
+
+    # Change to script directory to run docker-compose
+    original_dir = os.getcwd()
+    os.chdir(script_dir)
+
+    success, stdout, stderr = run_command("docker-compose up -d")
+
+    # Change back to original directory
+    os.chdir(original_dir)
 
     if not success:
         print_error("Failed to start cluster")
