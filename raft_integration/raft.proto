@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package raft;
+
+// Raft RPC Services
+service RaftNode {
+    // RequestVote RPC - used during leader election
+    rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+
+    // AppendEntries RPC - used for heartbeat and log replication
+    rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+
+    // ClientRequest RPC - clients submit operations to any node
+    rpc ClientRequest(ClientRequestMessage) returns (ClientRequestResponse);
+}
+
+// RequestVote RPC structures
+message RequestVoteRequest {
+    int32 term = 1;              // candidate's term
+    int32 candidate_id = 2;       // candidate requesting vote
+    int32 last_log_index = 3;     // index of candidate's last log entry
+    int32 last_log_term = 4;      // term of candidate's last log entry
+}
+
+message RequestVoteResponse {
+    int32 term = 1;              // current term, for candidate to update itself
+    bool vote_granted = 2;        // true means candidate received vote
+}
+
+// AppendEntries RPC structures
+message LogEntry {
+    int32 term = 1;               // term when entry was received by leader
+    int32 index = 2;              // position in the log
+    string operation = 3;         // the operation (e.g., "CREATE_POLL", "VOTE")
+    string data = 4;              // JSON-encoded operation data
+}
+
+message AppendEntriesRequest {
+    int32 term = 1;               // leader's term
+    int32 leader_id = 2;          // so follower can redirect clients
+    int32 prev_log_index = 3;     // index of log entry immediately preceding new ones
+    int32 prev_log_term = 4;      // term of prev_log_index entry
+    repeated LogEntry entries = 5; // log entries to store (empty for heartbeat)
+    int32 leader_commit = 6;      // leader's commit_index
+}
+
+message AppendEntriesResponse {
+    int32 term = 1;               // current term, for leader to update itself
+    bool success = 2;             // true if follower contained entry matching prev_log_index and prev_log_term
+    int32 match_index = 3;        // index of last matching log entry
+}
+
+// Client Request structures
+message ClientRequestMessage {
+    string operation = 1;         // operation type (e.g., "CREATE_POLL", "VOTE", "GET_RESULTS")
+    string data = 2;              // JSON-encoded operation data
+}
+
+message ClientRequestResponse {
+    bool success = 1;             // true if operation was successfully committed
+    string message = 2;           // response message or error
+    string result = 3;            // JSON-encoded result data
+    int32 leader_id = 4;          // current leader ID (for redirection if needed)
+}
