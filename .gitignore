@@ -1,0 +1,27 @@
+# Raft implementation directory (contains only generated proto files)
+raft_implementation/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.env
+
+# OS
+.DS_Store
+Thumbs.db
