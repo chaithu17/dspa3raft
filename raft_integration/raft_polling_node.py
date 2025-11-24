@@ -272,7 +272,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
                 majority = (len(self.peers) + 1) // 2 + 1
                 if replicated_count >= majority and self.log[n-1].term == self.current_term:
                     if n > self.commit_index:
-                        print(f"[Node {self.node_id}] Q4 STEP 6: Received MAJORITY ACKs ({replicated_count}/{len(self.peers)+1} nodes)")
+                        print(f"[Node {self.node_id}] Q4 STEP 6: Received MAJORITY ACKs ({replicated_count}/{len(self.peers)} nodes)")
                         print(f"[Node {self.node_id}] Q4 STEP 7: Committing entry {n}")
                         self.commit_index = n
                     break
