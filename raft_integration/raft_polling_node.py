@@ -149,7 +149,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
                         last_log_index=last_log_index,
                         last_log_term=last_log_term
                     )
-                    print(f"[Node {self.node_id}] sends RPC RequestVote to Node {peer_id}")
+                    print(f"Node {self.node_id} sends RPC RequestVote to Node {peer_id}")
                     response = stub.RequestVote(request, timeout=0.5)
 
                     with self.lock:
@@ -229,8 +229,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
                         if entries:
                             print(f"[Node {self.node_id}] Q4 STEP 3: Sending {len(entries)} log entries to Node {peer_id}")
 
-                        msg_type = "AppendEntries (heartbeat)" if not entries else f"AppendEntries ({len(entries)} entries)"
-                        print(f"[Node {self.node_id}] sends RPC {msg_type} to Node {peer_id}")
+                        print(f"Node {self.node_id} sends RPC AppendEntries to Node {peer_id}")
 
                         response = stub.AppendEntries(request, timeout=0.5)
 
@@ -348,26 +347,21 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
             if old_state != NodeState.FOLLOWER:
                 print(f"[Node {self.node_id}] State: {old_state.value} -> FOLLOWER (term {new_term})")
 
-    def _forward_to_leader(self, stub_class, request):
+    def _forward_to_leader(self, stub_class, method_name: str, request):
         """Forward request to leader (Q4 requirement)"""
         with self.lock:
             leader_id = self.current_leader
             if leader_id is None or leader_id not in self.peers:
                 return None
             leader_addr = self.peers[leader_id]
-        
+
         print(f"[Node {self.node_id}] Forwarding to leader Node {leader_id}")
-        
+
         try:
-            channel = grpc.insecure_channel(leader_addr)
-            stub = stub_class(channel)
-            
-            # Call the same method on the leader
-            method_name = type(request).__name__.replace('Request', '')
-            method = getattr(stub, method_name)
-            response = method(request, timeout=5.0)
-            channel.close()
-            return response
+            with grpc.insecure_channel(leader_addr) as channel:
+                stub = stub_class(channel)
+                method = getattr(stub, method_name)
+                return method(request, timeout=5.0)
         except Exception as e:
             print(f"[Node {self.node_id}] Forwarding failed: {e}")
             return None
@@ -376,7 +370,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
 
     def RequestVote(self, request, context):
         """Handle RequestVote RPC (Q3)"""
-        print(f"[Node {self.node_id}] runs RPC RequestVote called by Node {request.candidate_id}")
+        print(f"Node {self.node_id} runs RPC RequestVote called by Node {request.candidate_id}")
 
         with self.lock:
             if request.term > self.current_term:
@@ -406,8 +400,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
 
     def AppendEntries(self, request, context):
         """Handle AppendEntries RPC (Q3, Q4)"""
-        msg_type = "heartbeat" if not request.entries else f"{len(request.entries)} entries"
-        print(f"[Node {self.node_id}] runs RPC AppendEntries ({msg_type}) called by Node {request.leader_id}")
+        print(f"Node {self.node_id} runs RPC AppendEntries called by Node {request.leader_id}")
 
         with self.lock:
             if request.term > self.current_term:
@@ -459,7 +452,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
         with self.lock:
             if self.state != NodeState.LEADER:
                 # Forward to leader
-                resp = self._forward_to_leader(polling_pb2_grpc.PollServiceStub, request)
+                resp = self._forward_to_leader(polling_pb2_grpc.PollServiceStub, "CreatePoll", request)
                 if resp: return resp
                 context.set_code(grpc.StatusCode.UNAVAILABLE)
                 context.set_details("No leader available")
@@ -537,7 +530,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
         with self.lock:
             if self.state != NodeState.LEADER:
                 # Forward to leader
-                resp = self._forward_to_leader(polling_pb2_grpc.PollServiceStub, request)
+                resp = self._forward_to_leader(polling_pb2_grpc.PollServiceStub, "ClosePoll", request)
                 if resp: return resp
                 context.set_code(grpc.StatusCode.UNAVAILABLE)
                 context.set_details("No leader available")
@@ -587,7 +580,7 @@ class RaftPollingNode(raft_pb2_grpc.RaftNodeServicer,
         with self.lock:
             if self.state != NodeState.LEADER:
                 # Forward to leader
-                resp = self._forward_to_leader(polling_pb2_grpc.VoteServiceStub, request)
+                resp = self._forward_to_leader(polling_pb2_grpc.VoteServiceStub, "CastVote", request)
                 if resp: return resp
                 return polling_pb2.VoteResponse(status="No leader")
 
