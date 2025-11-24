@@ -113,7 +113,7 @@ def monitor_election():
     print_header("MONITORING ELECTION PROCESS")
 
     start_time = time.time()
-    max_wait = 15 # Maximum 15 seconds to elect leader
+    max_wait = 15  # Maximum 15 seconds to elect leader
     check_interval = 0.5
 
     election_events = []
