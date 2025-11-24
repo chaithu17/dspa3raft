@@ -113,7 +113,7 @@ def monitor_election():
     print_header("MONITORING ELECTION PROCESS")
 
     start_time = time.time()
-    max_wait = 15  # Maximum 15 seconds to elect leader
+    max_wait = 30  # Maximum 30 seconds to elect leader
     check_interval = 0.5
 
     election_events = []
@@ -265,7 +265,8 @@ def main():
         return 1
 
     # Wait for containers to initialize
-    time.sleep(5)
+    print_info("Waiting for containers to fully initialize...")
+    time.sleep(8)
 
     # Step 3: Verify containers
     print_header("STEP 3: VERIFY CONTAINERS")

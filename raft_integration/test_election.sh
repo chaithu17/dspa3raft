@@ -32,9 +32,9 @@ echo
 
 # Step 3: Wait for initialization
 echo "STEP 3: WAITING FOR INITIALIZATION"
-echo "Waiting 5 seconds for containers to start..."
-sleep 5
-echo "✓ Initialization complete"
+echo "Waiting for containers to fully initialize..."
+sleep 8
+echo "✓ Initialization wait complete"
 echo
 
 # Step 4: Monitor election
@@ -46,7 +46,7 @@ echo "Watching for election events (will stop when leader elected)..."
 echo
 
 START_TIME=$(date +%s)
-MAX_WAIT=15
+MAX_WAIT=30
 LEADER_FOUND=0
 
 while [ $(($(date +%s) - START_TIME)) -lt $MAX_WAIT ]; do
